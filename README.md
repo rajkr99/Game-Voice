@@ -1,90 +1,154 @@
-# GamerVoice — lightweight voice chat for gamers
-
-Audio-only rooms (up to 10 people) that use very little CPU, battery and data, so your game doesn't lag.
-
+# GamerVoice
+ 
+Lightweight, audio-only voice chat for gamers. Rooms of up to 10 people with very low CPU, battery and data usage, so your game doesn't lag.
+ 
+Built with **Kotlin + Jetpack Compose** on Android, **LiveKit** for real-time audio, and a small **Node.js token server** that hands out short-lived join passes.
+ 
+---
+ 
+## Features
+ 
+- Audio-only rooms (up to 10 people), join with a name and a room code
+- Random room code generator, copy and share buttons
+- Voice plays on the **media stream**, so game volume and quality don't drop because of a call
+- Does not take audio focus, so your game is not paused or ducked when voice starts
+- Noise cancellation modes: **Off / Standard / Strong**
+  - Standard: echo cancellation, noise suppression, auto gain control, high-pass filter
+  - Strong: Standard plus keyboard and finger-tap noise detection
+- **Clear voice** toggle (higher bitrate, 32 kbps instead of 20 kbps)
+- **Data saver** mode (lowest bitrate, takes priority over clear voice)
+- Per-user volume sliders in the room screen
+- Foreground service keeps the call alive in the background
+- Mic auto-mutes during a real phone call and comes back after it ends
+- In-app "Keep call alive" help for phone brands that kill background apps
+- Dark, flat UI with no animations or heavy images
+## Why it's light
+ 
+- Audio only: no camera, no video code paths
+- Mono Opus at about 20 kbps (about 12 kbps in data saver)
+- DTX: almost nothing is sent while you are silent
+- RED redundancy for lossy mobile networks (off in data saver)
+- Simulcast, dynacast and adaptive stream are off
+---
+ 
+## Project structure
+ 
 ```
 /app      Android app (Kotlin + Jetpack Compose)
-/server   Token server (Node.js) — gives the app permission to join a room
+/server   Token server (Node.js)
 ```
-
-How it works: the app asks **your token server** for a pass → the server checks the room isn't full and returns a short-lived pass → the app joins the **LiveKit** voice server with it. Your secret key lives only on the token server.
-
+ 
+```
+app/src/main/java/com/gamervoice/app/
+  MainActivity.kt, VoiceApp.kt
+  data/      SettingsRepository.kt, TokenApi.kt
+  service/   CallManager.kt, CallService.kt
+  ui/        AppRoot, JoinScreen, CallScreen, CallViewModel,
+             SettingsScreen, KeepAliveHelpScreen, theme/
+  util/      SystemSettings.kt
+```
+ 
+## How it works
+ 
+1. The app asks your **token server** for a pass.
+2. The server checks the room is not full and returns a short-lived token.
+3. The app joins the **LiveKit** voice server using that token.
+Your LiveKit secret key lives only on the token server and is never inside the app.
+ 
 ---
-
-## 1. Create a free LiveKit Cloud project
-1. Go to https://cloud.livekit.io and sign up (free).
-2. Create a project (any name).
-3. Open **Settings → Keys**. Copy:
-   - **WebSocket URL** (looks like `wss://myproject-abc123.livekit.cloud`) → `LIVEKIT_URL`
-   - **API Key** → `LIVEKIT_API_KEY`
-   - **API Secret** (only shown once!) → `LIVEKIT_API_SECRET`
-
-## 2. Deploy the token server on Render (free)
-1. Put this folder in a GitHub repository.
-2. Go to https://render.com → **New → Web Service** → connect the repo.
-3. Settings:
-   - Root directory: `server`
-   - Build command: `npm install`
-   - Start command: `npm start`
-   - Instance type: **Free**
-4. **Environment** tab → add `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (values from step 1).
-5. Deploy. Open `https://YOUR-NAME.onrender.com/health` — you should see `{"ok":true}`.
-
-> Free Render servers sleep after 15 min idle; the first join after that can take ~30–50 s. That's normal.
-
-Test locally instead: `cd server && cp .env.example .env` (fill it in), then `npm install && node --env-file=.env index.js`.
-
-## 3. Run the app on your phone
-1. Install **Android Studio** (latest) from https://developer.android.com/studio.
-2. **File → Open** → choose this folder. Let Gradle sync (first time takes a few minutes).
-   - If asked to create a Gradle wrapper, accept (or run `gradle wrapper` once).
-3. Open `gradle.properties` and set:
-   `TOKEN_SERVER_URL=https://YOUR-NAME.onrender.com` (no trailing slash).
-   You can also change it later inside the app: **Settings → Advanced**.
-4. On your phone: **Settings → About phone** → tap **Build number** 7 times → **Developer options → USB debugging ON**.
-5. Plug the phone in, pick it at the top of Android Studio, press ▶ **Run**.
-
-## 4. Build a signed APK to share with friends
-1. Android Studio → **Build → Generate Signed App Bundle / APK** → **APK** → Next.
-2. **Create new…** keystore: pick a file (e.g. `gamervoice.jks`), set passwords, alias `gamervoice`. **Back this file up** — you need it for every update.
-3. Choose **release** → Finish. The APK appears in `app/release/app-release.apk`.
-   (Alternative: create `keystore.properties` in the project root with `storeFile`, `storePassword`, `keyAlias`, `keyPassword` and run `./gradlew assembleRelease`.)
-4. Send the APK (WhatsApp, Drive, Telegram).
-5. Friends: tap the file → Android asks to allow **Install unknown apps** for that app (Chrome/Files/WhatsApp) → allow → Install.
-
-## 5. Test checklist
-- [ ] Mute / unmute works, muted icon shows for others
-- [ ] Push-to-talk (Settings) — hold to talk, release = muted
-- [ ] Switch Wi-Fi ↔ mobile data mid-call → shows "Reconnecting…" then reconnects
-- [ ] Run a heavy game (BGMI, Free Fire, CoD) for 20+ minutes — no lag, call stays on
-- [ ] Lock screen for 10 minutes — call stays on
-- [ ] Bluetooth earbuds — select in the speaker menu; headset button toggles mute
-- [ ] Incoming real phone call → voice chat mutes, unmutes after hanging up
-- [ ] Battery saver ON
-- [ ] 10 people in a room; the 11th sees "Room is full"
-- [ ] A low-end phone (2–3 GB RAM)
-- [ ] Wrong server URL / airplane mode show a clear message
-- [ ] Notification Mute / Leave buttons work
-
-If calls drop in the background, open the app's **Keep call alive** help (❓ icon) and follow the tips for your brand.
-
-## 6. Free tier & self-hosting
-- LiveKit Cloud's free **Build** plan includes a monthly quota of participant-minutes (around 5,000/month at the time of writing — check https://livekit.io/pricing). Usage counts **per person**: 10 people × 1 hour = 600 minutes. When you hit the limit, service stops until next month.
-- **Self-host** to remove the limit: rent a small VPS (1–2 vCPU, e.g. Hetzner/DigitalOcean) and follow https://docs.livekit.io/home/self-hosting/deployment/ (Docker + generated config, needs a domain for TLS). Then just change `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` on Render — **no app change needed**.
-
-## 7. Later: Google Play
-Create a Google Play Console account ($25 one-time), build an **App Bundle** (.aab) instead of APK, and fill in the store listing. Play will ask you to declare the microphone foreground service usage ("voice call").
-
+ 
+## Setup
+ 
+### 1. Create a free LiveKit Cloud project
+ 
+1. Go to [cloud.livekit.io](https://cloud.livekit.io) and sign up.
+2. Create a project.
+3. Open **Settings > Keys** and copy:
+   - WebSocket URL (looks like `wss://myproject-abc123.livekit.cloud`) as `LIVEKIT_URL`
+   - API Key as `LIVEKIT_API_KEY`
+   - API Secret (shown only once) as `LIVEKIT_API_SECRET`
+### 2. Run or deploy the token server
+ 
+The server needs three environment variables:
+ 
+| Variable | Description |
+|---|---|
+| `LIVEKIT_URL` | Your LiveKit WebSocket URL (`wss://...`) |
+| `LIVEKIT_API_KEY` | LiveKit API key |
+| `LIVEKIT_API_SECRET` | LiveKit API secret |
+ 
+**Run locally**
+ 
+```bash
+cd server
+npm install
+cp .env.example .env     # then fill in the three values
+node index.js
+```
+ 
+**Deploy on Render (free tier)**
+ 
+1. Push the `server` folder to a GitHub repo (with `package.json` at the repo root).
+2. On [render.com](https://render.com): **New + > Web Service**, pick the repo.
+3. Build command: `npm install`, start command: `node index.js`, instance type: Free.
+4. Add the three environment variables, then deploy.
+5. Copy the service URL (for example `https://your-server.onrender.com`).
+> Render's free tier sleeps after about 15 minutes of inactivity. The first join after that can take 30 to 60 seconds. Use a ping service such as UptimeRobot or a paid plan to avoid this.
+ 
+### 3. Configure the Android app
+ 
+Open `gradle.properties` in the project root and set your server URL (no trailing slash):
+ 
+```properties
+TOKEN_SERVER_URL=https://your-server.onrender.com
+```
+ 
+### 4. Build and run
+ 
+1. Open the project root (the folder that contains `settings.gradle.kts`) in **Android Studio**.
+2. Wait for the Gradle sync to finish.
+3. Create a run configuration: **Add Configuration > + > Android App**, module `app`.
+4. Pick a device and press **Run**.
+Requirements: JDK 17, minSdk 24, compile/target SDK 35.
+ 
+> Test on a **real phone** when possible. Emulators are unreliable for microphone and audio routing.
+ 
 ---
-
-### Why it's light
-- Audio only (no camera, no video code paths), mono Opus at ~20 kbps (~12 kbps in data saver)
-- DTX: when you're silent almost nothing is sent
-- RED redundancy for lossy mobile networks (off in data saver)
-- Simulcast / dynacast / adaptive stream off
-- Dark, flat UI with no animations or images
-
-## Game + voice audio (v1.1)
-- Voice now plays on the **media** stream (same volume as the game) and does not take audio focus, so games are not ducked or forced into call mode.
-- Settings → **Noise cancellation**: Off / Standard / Strong. **Clear voice** raises Opus to 32 kbps.
-- Use headphones: on the phone speaker the mic can pick up game sound.
+ 
+## Testing checklist (use 2 phones, run a game on one)
+ 
+1. Game audio and voice are both audible on speaker, and the game does not pause or get quieter.
+2. With headphones on, the teammate does not hear the game audio.
+3. Compare keyboard and tap noise in **Standard** and **Strong** modes.
+4. A real incoming call mutes the mic, and it turns back on after the call.
+5. Play for 20 minutes: no lag or unusual battery drain.
+## Tips and limits
+ 
+- Use **headphones**: on phone speaker the mic picks up the game's sound.
+- On Bluetooth earbuds, the phone's mic is used. Earbuds are for listening only.
+- **Strong** mode currently uses WebRTC filters only. A true AI denoiser (RNNoise) needs native code and is planned as a separate step.
+- LiveKit Cloud free plan has a monthly participant-minute quota. Check [livekit.io/pricing](https://livekit.io/pricing). You can self-host LiveKit to remove the limit and just change the three environment variables on the token server.
+## Release build
+ 
+Release signing reads from `keystore.properties` in the project root (not committed to git). Create it with your keystore path, passwords and key alias, then build an App Bundle (`.aab`) for Google Play. Play will ask you to declare the microphone foreground service usage ("voice call").
+ 
+## Security
+ 
+Never commit these files (already in `.gitignore`):
+ 
+- `local.properties`
+- `keystore.properties`, `*.jks`, `*.keystore`
+- `.env`
+If a secret is ever pushed by mistake, rotate it immediately (create a new LiveKit API key).
+ 
+## Roadmap
+ 
+- RNNoise AI noise suppression
+- Accounts, friends and lobbies (Supabase)
+## Tech stack
+ 
+- Android: Kotlin, Jetpack Compose, DataStore, foreground service
+- Voice: [LiveKit](https://livekit.io) Android SDK
+- Server: Node.js (token generation)
+- Hosting: Render (token server), LiveKit Cloud (media)
+ 
